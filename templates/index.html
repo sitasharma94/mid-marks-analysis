@@ -4,7 +4,13 @@
     <title>Mid Marks Analysis</title>
 </head>
 <body>
-    <h1>Mid Marks Analysis System</h1>
-    <p>Upload Excel file to filter students below threshold.</p>
+
+<h2>Upload Excel File</h2>
+
+<form action="/upload" method="post" enctype="multipart/form-data">
+    <input type="file" name="file" required>
+    <button type="submit">Analyze</button>
+</form>
+
 </body>
 </html>
