@@ -4,9 +4,13 @@ import io
 import sqlite3
 
 app = Flask(__name__)
+app.config['SESSION_PERMANENT'] = False
 app.secret_key = "secret123"
 
+# Global variables
 filtered_data = None
+last_threshold = None
+last_condition = None
 
 # ---------------- DATABASE SETUP ----------------
 def init_db():
@@ -29,6 +33,7 @@ init_db()
 # ---------------- HOME ----------------
 @app.route("/")
 def home():
+    session.pop("user", None)
     if "user" not in session:
         return redirect(url_for("login"))
 
@@ -37,7 +42,7 @@ def home():
 # ---------------- UPLOAD ----------------
 @app.route("/upload", methods=["POST"])
 def upload():
-    global filtered_data
+    global filtered_data, last_threshold, last_condition
 
     file = request.files["file"]
     df = pd.read_excel(file)
@@ -45,11 +50,10 @@ def upload():
     # Normalize column names
     df.columns = df.columns.str.strip().str.lower()
 
-    # Possible names for marks column
+    # Detect marks column
     possible_names = ["marks", "midmarks", "mid marks", "score"]
 
     marks_col = None
-
     for col in df.columns:
         if col in possible_names:
             marks_col = col
@@ -58,29 +62,61 @@ def upload():
     if marks_col is None:
         return "❌ Marks column not found in Excel file"
 
-    # Filter
-    filtered_data = df[df[marks_col] < 12]
+    # Get user input
+    threshold = request.form.get("threshold")
+    condition = request.form.get("condition")
 
-    table = filtered_data.to_html(classes='table table-bordered')
+    if not threshold or not condition:
+        return "Please provide threshold and condition"
+
+    threshold = int(threshold)
+
+    # Store values for download
+    last_threshold = threshold
+    last_condition = condition
+
+    # Apply filter
+    if condition == "<":
+        filtered_data = df[df[marks_col] < threshold]
+    elif condition == ">":
+        filtered_data = df[df[marks_col] > threshold]
+    elif condition == "=":
+        filtered_data = df[df[marks_col] == threshold]
+
+    # Display result
+    if filtered_data.empty:
+        table = "<p style='color:red;'>No matching records found</p>"
+    else:
+        table = filtered_data.to_html(classes='table table-bordered')
 
     return render_template("index.html", table=table, show_download=True)
 
 # ---------------- DOWNLOAD ----------------
 @app.route("/download")
 def download():
-    global filtered_data
+    global filtered_data, last_threshold, last_condition
 
-    if filtered_data is None:
+    if filtered_data is None or filtered_data.empty:
         return "No data to download"
 
     output = io.BytesIO()
     filtered_data.to_excel(output, index=False)
     output.seek(0)
 
+    # Dynamic filename
+    if last_condition == "<":
+        filename = f"students_below_{last_threshold}.xlsx"
+    elif last_condition == ">":
+        filename = f"students_above_{last_threshold}.xlsx"
+    elif last_condition == "=":
+        filename = f"students_equal_{last_threshold}.xlsx"
+    else:
+        filename = "students_filtered.xlsx"
+
     return send_file(
         output,
         as_attachment=True,
-        download_name="students_below_12.xlsx",
+        download_name=filename,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
@@ -101,9 +137,7 @@ def signup():
             )
             conn.commit()
             conn.close()
-
             return redirect(url_for("login"))
-
         except:
             conn.close()
             return "User already exists"
@@ -128,13 +162,13 @@ def login():
         conn.close()
 
         if user:
+            session.clear()  # 🔥 clear old session
             session["user"] = username
             return redirect(url_for("home"))
         else:
             return "Invalid credentials"
 
     return render_template("login.html")
-
 # ---------------- LOGOUT ----------------
 @app.route("/logout")
 def logout():

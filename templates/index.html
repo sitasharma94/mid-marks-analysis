@@ -13,14 +13,26 @@
     <h2>Upload Excel File</h2>
 
     <form action="/upload" method="post" enctype="multipart/form-data">
-        <input type="file" name="file" class="form-control mb-3" required>
-        <button class="btn btn-primary">Analyze</button>
-    </form>
 
+        <input type="file" name="file" class="form-control mb-3" required>
+
+        <input type="number" name="threshold" class="form-control mb-3"
+        placeholder="Enter threshold (e.g. 12)" required>
+
+        <select name="condition" class="form-control mb-3">
+            <option value="<">Less than</option>
+            <option value=">">Greater than</option>
+            <option value="=">Equal to</option>
+        </select>
+
+        <button class="btn btn-primary w-100">Analyze</button>
+
+    </form>
     {% if table %}
-        <h3 class="mt-4">Students with Marks below 12</h3>
+    <div class="mt-4">
         {{ table | safe }}
-    {% endif %}
+    </div>
+{% endif %}
 
     {% if show_download %}
         <a href="/download" class="btn btn-success mt-3">
